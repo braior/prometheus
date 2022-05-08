@@ -1,6 +1,4 @@
-
 class Singleton:
-
     __cls = dict()
 
     def __init__(self, cls):
@@ -14,7 +12,7 @@ class Singleton:
     def __setitem__(self, key, value):
         self.cls[key] = value
 
-    def __getitem__(self,item):
+    def __getitem__(self, item):
         return self.cls[item]
 
     @property

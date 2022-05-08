@@ -1,13 +1,11 @@
-
-import imp
 import json
-import logger
+from logger import Logger
 import socket
 from prometheus_client import Gauge
 import subprocess
 from prometheus_client import CollectorRegistry
 
-log = logger.Logger("debug")
+log = Logger("debug")
 
 
 class Exporter:
@@ -16,14 +14,16 @@ class Exporter:
         self.__REGISTRY = CollectorRegistry(auto_describe=False)
         self.g_tcp = Gauge('container_tcp_num', 'get container tcp connect number', [
             'instance', 'namespace', 'container_name', 'pod_name', 'status', 'container_id'], registry=self.__REGISTRY)
-        
+
         self.g_udp = Gauge('container_udp_num', 'get container udp connect number', [
             'instance', 'namespace', 'container_name', 'pod_name', 'container_id'], registry=self.__REGISTRY)
 
-        if subprocess.call(["systemctl", "status", "docker"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+        if subprocess.call(["systemctl", "status", "docker"], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL) == 0:
             log.info("docker is running!")
             self.cri = "docker"
-        elif subprocess.call(["systemctl", "status", "containerd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0:
+        elif subprocess.call(["systemctl", "status", "containerd"], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL) == 0:
             log.info("containerd is running!")
             self.cri = "containerd"
         else:
@@ -32,34 +32,35 @@ class Exporter:
         self.get_container_id_cmd = ""
         self.get_container_pid_cmd = ""
         self.get_container_name_cmd = ""
+        self.get_connect_info_cmd = ""
 
     def get_container_tcp_udp_number(self, container_pid, protocol):
         if protocol == "tcp":
             try:
-                get_tcp_info_cmd = """sudo nsenter -t %s -n netstat -tan |awk '{if (NR>2) a[$NF]+=1;} END {for(i in a){print i" "a[i];}}'""" % container_pid
+                self.get_connect_info_cmd = """sudo nsenter -t %s -n netstat -tan  \
+                |awk '{if (NR>2) a[$NF]+=1;} END {for(i in a){print i" "a[i];}}'""" % container_pid
                 exec_command = subprocess.run(
-                    get_tcp_info_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
+                    self.get_connect_info_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, shell=True, timeout=None, check=False, universal_newlines=True)
                 if exec_command.returncode != 0:
-                    log.error("exec command errror: %s" % get_tcp_info_cmd)
+                    log.error("exec command error: %s" % self.get_connect_info_cmd)
                 else:
                     tcp_info = {}
                     for line in exec_command.stdout.strip().split("\n"):
-                        tcp_info[line.strip().split()[0]
-                                 ] = line.strip().split()[1]
+                        tcp_info[line.strip().split()[0]] = line.strip().split()[1]
                     return tcp_info
             except Exception as e:
                 log.error(e)
         elif protocol == "udp":
             try:
-                get_udp_info_cmd = "sudo nsenter -t %s -n netstat -nua |wc -l" % container_pid
+                self.get_connect_info_cmd = "sudo nsenter -t %s -n netstat -nua |wc -l" % container_pid
                 exec_command = subprocess.run(
-                    get_udp_info_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
+                    self.get_connect_info_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, shell=True, timeout=None, check=False, universal_newlines=True)
                 if exec_command.returncode != 0:
-                    log.error("exec command errror: %s" % get_tcp_info_cmd)
+                    log.error("exec command error: %s" % self.get_connect_info_cmd)
                 else:
-                    return int(exec_command.stdout.strip())-2
+                    return int(exec_command.stdout.strip()) - 2
             except Exception as e:
                 log.error(e)
 
@@ -74,7 +75,7 @@ class Exporter:
                 self.get_container_id_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, shell=True, timeout=None, check=False, universal_newlines=True)
             if exec_command.returncode != 0:
-                log.error("exec command errror: %s" %
+                log.error("exec command error: %s" %
                           self.get_container_id_cmd)
             else:
                 return exec_command.stdout.split()
@@ -83,16 +84,15 @@ class Exporter:
 
     def get_container_pid(self, container_id):
         if self.cri == "docker":
-            self.get_container_pid_cmd = "docker inspect -f '{{.State.Pid}}' %s " % (
-                container_id)
+            self.get_container_pid_cmd = "docker inspect -f '{{.State.Pid}}' %s " % container_id
         elif self.cri == "containerd":
-            self.get_container_pid_cmd = "crictl inspect %s" % (container_id)
+            self.get_container_pid_cmd = "crictl inspect %s" % container_id
         try:
             exec_command = subprocess.run(
                 self.get_container_pid_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, shell=True, timeout=None, check=False, universal_newlines=True)
             if exec_command.returncode != 0:
-                log.error("exec command errror: %s" %
+                log.error("exec command error: %s" %
                           self.get_container_pid_cmd)
             else:
                 if self.cri == "docker":
@@ -104,24 +104,23 @@ class Exporter:
         except Exception as e:
             log.error(e)
 
-    def get_container_lable(self, container_id):
+    def get_container_labels(self, container_id):
         if self.cri == "docker":
             self.get_container_name_cmd = "docker inspect -f %s " % (
                 container_id)
         elif self.cri == "containerd":
-            self.get_container_name_cmd = "crictl inspect %s" % (container_id)
+            self.get_container_name_cmd = "crictl inspect %s" % container_id
         try:
             exec_command = subprocess.run(
                 self.get_container_name_cmd, stdin=None, input=None, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, shell=True, timeout=None, check=False, universal_newlines=True)
             if exec_command.returncode != 0:
-                log.error("exec command errror: %s" %
+                log.error("exec command error: %s" %
                           self.get_container_name_cmd)
             else:
                 tmp_dict = {}
                 hostname = socket.gethostname()
                 tmp_dict["instance"] = socket.gethostbyname(hostname)
-                pid = self.get_container_pid(container_id)
                 if self.cri == "docker":
                     container_inspect = json.loads(exec_command.stdout)
                     tmp_dict["container_id"] = container_id
@@ -143,13 +142,13 @@ class Exporter:
     def generate_container_tcp_info(self):
         container_info = {}
         containers_id = self.get_container_id()
-        if containers_id != None:
-            for id in containers_id:
-                pid = self.get_container_pid(id)
-                container_labels = self.get_container_lable(id)
+        if containers_id is not None:
+            for container_id in containers_id:
+                pid = self.get_container_pid(container_id)
+                container_labels = self.get_container_labels(container_id)
                 tcp_info = self.get_container_tcp_udp_number(pid, "tcp")
                 container_labels["status"] = tcp_info
-                container_info[id] = container_labels
+                container_info[container_id] = container_labels
             json_container_info = json.dumps(container_info)
             log.info("get tcp info: \n%s" % json_container_info)
             return container_info
@@ -160,13 +159,13 @@ class Exporter:
     def generate_container_udp_info(self):
         container_info = {}
         containers_id = self.get_container_id()
-        if containers_id != None:
-            for id in containers_id:
-                pid = self.get_container_pid(id)
-                container_labels = self.get_container_lable(id)
+        if containers_id is not None:
+            for container_id in containers_id:
+                pid = self.get_container_pid(container_id)
+                container_labels = self.get_container_labels(container_id)
                 udp_number = self.get_container_tcp_udp_number(pid, "udp")
                 container_labels["udp"] = udp_number
-                container_info[id] = container_labels
+                container_info[container_id] = container_labels
             json_container_info = json.dumps(container_info)
             log.info("get udp info: \n%s" % json_container_info)
             return container_info
