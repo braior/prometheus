@@ -1,5 +1,5 @@
 from flask import Response, Flask
-from exporter.exporter import Exporter
+from exporter import Exporter
 import prometheus_client
 
 container = Exporter()

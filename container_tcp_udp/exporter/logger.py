@@ -11,7 +11,7 @@ class Logger:
                  name=os.path.split(os.path.splitext(sys.argv[0])[0])[0],
                  log_name=time.strftime("%Y-%m-%d.log", time.localtime()),
                  log_path=os.path.join(os.path.dirname(
-                     os.path.abspath(__file__)), "../log"),
+                     os.path.abspath(__file__)), "log"),
                  use_console=True) -> None:
         """
         :param set_level: 日志级别["NOTSET"|"DEBUG"|"INFO"|"WARNING"|"ERROR"|"CRITICAL"],默认为INFO
